@@ -1,5 +1,5 @@
 {
-  "name": "trash-or-treasure",
+  {"name": "trash-or-treasure",
   "version": "1.0.0",
   "private": true,
   "dependencies": {
