@@ -2,12 +2,12 @@
 import { useState, useRef, useCallback } from "react";
 
 const CATEGORIES = [
-  { id: "books", label: "Books", icon: "\u{1F4DA}", sources: "AbeBooks, eBay" },
-  { id: "records", label: "Vinyl Records", icon: "\u{1F3B6}", sources: "Discogs, eBay" },
-  { id: "cds", label: "CDs / DVDs", icon: "\u{1F4BF}", sources: "Discogs, eBay" },
-  { id: "games", label: "Video Games", icon: "\u{1F3AE}", sources: "PriceCharting, eBay" },
-  { id: "cards", label: "Trading Cards", icon: "\u{1F0CF}", sources: "TCGPlayer, eBay" },
-  { id: "other", label: "Other Collectibles", icon: "\u2728", sources: "eBay" },
+  { id: "books", label: "Books", icon: "📚", sources: "AbeBooks, eBay" },
+  { id: "records", label: "Vinyl Records", icon: "🎶", sources: "Discogs, eBay" },
+  { id: "cds", label: "CDs / DVDs", icon: "💿", sources: "Discogs, eBay" },
+  { id: "games", label: "Video Games", icon: "🎮", sources: "PriceCharting, eBay" },
+  { id: "cards", label: "Trading Cards", icon: "🃏", sources: "TCGPlayer, eBay" },
+  { id: "other", label: "Other Collectibles", icon: "✨", sources: "eBay" },
 ];
 
 function TreasureIcon({ size = 24 }) {
@@ -20,10 +20,10 @@ function TreasureIcon({ size = 24 }) {
 
 function ValueBadge({ tier }) {
   const styles = {
-    treasure: { bg: "linear-gradient(135deg, #d4a017, #f5d442)", color: "#000", label: "\u{1F451} TREASURE" },
-    good: { bg: "linear-gradient(135deg, #2563eb, #60a5fa)", color: "#fff", label: "\u{1F4A0} GOOD FIND" },
-    decent: { bg: "linear-gradient(135deg, #059669, #34d399)", color: "#fff", label: "\u2705 DECENT" },
-    trash: { bg: "linear-gradient(135deg, #525252, #737373)", color: "#fff", label: "\u{1F5D1}\uFE0F SKIP" },
+    treasure: { bg: "linear-gradient(135deg, #d4a017, #f5d442)", color: "#000", label: "👑 TREASURE" },
+    good: { bg: "linear-gradient(135deg, #2563eb, #60a5fa)", color: "#fff", label: "💠 GOOD FIND" },
+    decent: { bg: "linear-gradient(135deg, #059669, #34d399)", color: "#fff", label: "✅ DECENT" },
+    trash: { bg: "linear-gradient(135deg, #525252, #737373)", color: "#fff", label: "🗑️ SKIP" },
   };
   const s = styles[tier] || styles.trash;
   return (
@@ -88,7 +88,13 @@ export default function Home() {
     }
   };
 
-  const reset = () => { setImage(null); setImagePreview(null); setResults(null); setError(null); };
+  const reset = () => {
+    setImage(null);
+    setImagePreview(null);
+    setResults(null);
+    setError(null);
+  };
+
   const totalValue = results?.items?.reduce((sum, i) => sum + (i.estimatedValue || 0), 0) || 0;
   const treasureCount = results?.items?.filter((i) => i.tier === "treasure").length || 0;
   const selectedCat = CATEGORIES.find((c) => c.id === category);
@@ -111,7 +117,11 @@ export default function Home() {
         <label style={{ display: "block", fontSize: 11, color: "#737373", marginBottom: 6, letterSpacing: "0.5px" }}>CATEGORY</label>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
           {CATEGORIES.map((cat) => (
-            <button key={cat.id} onClick={() => setCategory(cat.id)} style={{ background: category === cat.id ? "rgba(212,160,23,0.15)" : "var(--surface)", border: "1px solid " + (category === cat.id ? "#d4a017" : "var(--border)"), borderRadius: 8, padding: "10px 4px", cursor: "pointer", textAlign: "center", transition: "all 0.2s" }}>
+            <button key={cat.id} onClick={() => setCategory(cat.id)} style={{
+              background: category === cat.id ? "rgba(212,160,23,0.15)" : "var(--surface)",
+              border: "1px solid " + (category === cat.id ? "#d4a017" : "var(--border)"),
+              borderRadius: 8, padding: "10px 4px", cursor: "pointer", textAlign: "center", transition: "all 0.2s"
+            }}>
               <div style={{ fontSize: 20 }}>{cat.icon}</div>
               <div style={{ fontSize: 10, color: category === cat.id ? "#d4a017" : "#a3a3a3", marginTop: 2, fontWeight: category === cat.id ? 700 : 400 }}>{cat.label}</div>
             </button>
@@ -120,12 +130,21 @@ export default function Home() {
       </section>
 
       {!imagePreview ? (
-        <section onDrop={handleDrop} onDragOver={(e) => e.preventDefault()} style={{ border: "2px dashed #333", borderRadius: 12, padding: "40px 20px", textAlign: "center", background: "var(--surface)", cursor: "pointer" }} onClick={() => fileInputRef.current?.click()}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>\u{1F4F7}</div>
+        <section onDrop={handleDrop} onDragOver={(e) => e.preventDefault()} style={{
+          border: "2px dashed #333", borderRadius: 12, padding: "40px 20px", textAlign: "center",
+          background: "var(--surface)", cursor: "pointer"
+        }} onClick={() => fileInputRef.current?.click()}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>{"📷"}</div>
           <p style={{ color: "#a3a3a3", fontSize: 14, margin: "0 0 16px" }}>Snap a photo of your collection</p>
           <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
-            <button onClick={(e) => { e.stopPropagation(); cameraInputRef.current?.click(); }} style={{ background: "linear-gradient(135deg, #d4a017, #b8860b)", color: "#000", border: "none", borderRadius: 8, padding: "10px 20px", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>\u{1F4F8} Take Photo</button>
-            <button onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }} style={{ background: "var(--border)", color: "#e5e5e5", border: "none", borderRadius: 8, padding: "10px 20px", fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>\u{1F4C1} Upload</button>
+            <button onClick={(e) => { e.stopPropagation(); cameraInputRef.current?.click(); }} style={{
+              background: "linear-gradient(135deg, #d4a017, #b8860b)", color: "#000", border: "none",
+              borderRadius: 8, padding: "10px 20px", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit"
+            }}>{"📸"} Take Photo</button>
+            <button onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }} style={{
+              background: "var(--border)", color: "#e5e5e5", border: "none",
+              borderRadius: 8, padding: "10px 20px", fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "inherit"
+            }}>{"📁"} Upload</button>
           </div>
           <input ref={fileInputRef} type="file" accept="image/*" onChange={(e) => handleImage(e.target.files?.[0])} style={{ display: "none" }} />
           <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={(e) => handleImage(e.target.files?.[0])} style={{ display: "none" }} />
@@ -134,17 +153,31 @@ export default function Home() {
         <section>
           <div style={{ position: "relative", borderRadius: 12, overflow: "hidden", marginBottom: 12, border: "1px solid var(--border)" }}>
             <img src={imagePreview} alt="Preview" style={{ width: "100%", display: "block", maxHeight: 300, objectFit: "cover" }} />
-            <button onClick={reset} style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.7)", color: "#fff", border: "none", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>\u2715</button>
+            <button onClick={reset} style={{
+              position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.7)", color: "#fff",
+              border: "none", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", fontSize: 16,
+              display: "flex", alignItems: "center", justifyContent: "center"
+            }}>{"✕"}</button>
           </div>
           {!results && (
-            <button onClick={analyze} disabled={loading} className={loading ? "" : "treasure-glow"} style={{ width: "100%", background: loading ? "#333" : "linear-gradient(135deg, #d4a017, #b8860b)", color: loading ? "#737373" : "#000", border: "none", borderRadius: 12, padding: "16px", fontSize: 16, fontWeight: 800, cursor: loading ? "wait" : "pointer", fontFamily: "inherit", letterSpacing: "0.5px", marginBottom: 16 }}>
-              {loading ? <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}><span className="animate-spin" style={{ display: "inline-block", width: 16, height: 16, border: "2px solid #525252", borderTopColor: "#d4a017", borderRadius: "50%" }} />Scanning for treasure...</span> : "\u{1F50D} FIND THE TREASURE"}
+            <button onClick={analyze} disabled={loading} className={loading ? "" : "treasure-glow"} style={{
+              width: "100%", background: loading ? "#333" : "linear-gradient(135deg, #d4a017, #b8860b)",
+              color: loading ? "#737373" : "#000", border: "none", borderRadius: 12, padding: "16px",
+              fontSize: 16, fontWeight: 800, cursor: loading ? "wait" : "pointer", fontFamily: "inherit",
+              letterSpacing: "0.5px", marginBottom: 16
+            }}>
+              {loading ? (
+                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  <span className="animate-spin" style={{ display: "inline-block", width: 16, height: 16, border: "2px solid #525252", borderTopColor: "#d4a017", borderRadius: "50%" }} />
+                  Scanning for treasure...
+                </span>
+              ) : "🔍 FIND THE TREASURE"}
             </button>
           )}
         </section>
       )}
 
-      {error && <div style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.3)", borderRadius: 8, padding: 12, marginTop: 12, color: "#fca5a5", fontSize: 13 }}>\u26A0\uFE0F {error}</div>}
+      {error && <div style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.3)", borderRadius: 8, padding: 12, marginTop: 12, color: "#fca5a5", fontSize: 13 }}>{"⚠️"} {error}</div>}
 
       {results && (
         <section className="animate-fade-in" style={{ marginTop: 16 }}>
@@ -163,17 +196,22 @@ export default function Home() {
               </div>
             </div>
           </div>
+
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {results.items?.sort((a, b) => (b.estimatedValue || 0) - (a.estimatedValue || 0)).map((item, i) => (
-              <div key={i} className="animate-fade-in" style={{ background: item.tier === "treasure" ? "linear-gradient(135deg, rgba(212,160,23,0.08), rgba(212,160,23,0.02))" : "var(--surface)", border: "1px solid " + (item.tier === "treasure" ? "rgba(212,160,23,0.4)" : "var(--border)"), borderRadius: 10, padding: 12, animationDelay: i * 0.1 + "s", opacity: 0 }}>
+              <div key={i} className="animate-fade-in" style={{
+                background: item.tier === "treasure" ? "linear-gradient(135deg, rgba(212,160,23,0.08), rgba(212,160,23,0.02))" : "var(--surface)",
+                border: "1px solid " + (item.tier === "treasure" ? "rgba(212,160,23,0.4)" : "var(--border)"),
+                borderRadius: 10, padding: 12, animationDelay: i * 0.1 + "s", opacity: 0
+              }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                      <span style={{ fontSize: 14 }}>{i === 0 ? "\u{1F451}" : i === 1 ? "\u{1F948}" : i === 2 ? "\u{1F949}" : "\u{1F4E6}"}</span>
+                      <span style={{ fontSize: 14 }}>{i === 0 ? "👑" : i === 1 ? "🥈" : i === 2 ? "🥉" : "📦"}</span>
                       <span style={{ fontSize: 13, fontWeight: 700, color: "#e5e5e5" }}>{item.title}</span>
                     </div>
                     {item.details && <p style={{ fontSize: 11, color: "#737373", margin: "2px 0 0", lineHeight: 1.4 }}>{item.details}</p>}
-                    {item.whyValuable && item.tier === "treasure" && <p style={{ fontSize: 11, color: "#d4a017", margin: "4px 0 0", lineHeight: 1.4, fontStyle: "italic" }}>\u{1F4A1} {item.whyValuable}</p>}
+                    {item.whyValuable && item.tier === "treasure" && <p style={{ fontSize: 11, color: "#d4a017", margin: "4px 0 0", lineHeight: 1.4, fontStyle: "italic" }}>{"💡"} {item.whyValuable}</p>}
                   </div>
                   <div style={{ textAlign: "right", flexShrink: 0 }}>
                     <div style={{ fontSize: 18, fontWeight: 800, color: item.tier === "treasure" ? "#d4a017" : "#e5e5e5" }}>${item.estimatedValue?.toLocaleString() || "?"}</div>
@@ -183,8 +221,9 @@ export default function Home() {
               </div>
             ))}
           </div>
+
           <p style={{ fontSize: 10, color: "#525252", textAlign: "center", marginTop: 16, lineHeight: 1.4 }}>Estimates based on recent {selectedCat?.sources} sales. Actual prices vary by condition, edition, and market demand.</p>
-          <button onClick={reset} style={{ width: "100%", background: "var(--surface)", color: "#d4a017", border: "1px solid #d4a017", borderRadius: 12, padding: "14px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginTop: 12 }}>\u{1F4F7} SCAN AGAIN</button>
+          <button onClick={reset} style={{ width: "100%", background: "var(--surface)", color: "#d4a017", border: "1px solid #d4a017", borderRadius: 12, padding: "14px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginTop: 12 }}>{"📷"} SCAN AGAIN</button>
         </section>
       )}
     </main>
