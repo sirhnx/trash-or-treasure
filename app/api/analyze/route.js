@@ -1,17 +1,20 @@
 import { NextResponse } from "next/server";
 
 const CATEGORY_PROMPTS = {
-  books: `You are an expert rare book dealer. Analyze this image and identify every book title and author visible. For each book estimate current market value based on: first editions, signed copies, rare printings, condition, dust jackets, genre premiums (sci-fi, beat literature, occult, art books), publisher. Look for sleeper hits.`,
-  records: `You are an expert vinyl record dealer. Analyze this image and identify every album and artist visible. For each record estimate current market value based on: original pressings vs reissues, country of pressing (Japanese/UK originals premium), genre (jazz, psych, prog, punk, soul, electronic), condition (VG+/NM/sealed), color vinyl, limited editions, promo copies.`,
-  cds: `You are an expert CD and DVD collector. Analyze this image and identify every CD and DVD title visible. For each item estimate current market value based on: out of print titles, Japanese editions with OBI strips, limited editions, box sets, digipaks, cult films, criterion collection, horror DVDs, promo copies, region-specific releases.`,
-  games: `You are an expert retro video game dealer. Analyze this image and identify every game title and console visible. For each game estimate current market value based on: complete in box vs loose vs sealed, console (NES/SNES/N64/GameCube/PS1), rare titles, limited runs, recalled games, condition of box and manual.`,
-  cards: `You are an expert trading card appraiser. Analyze this image and identify every card visible. For each card estimate current market value based on: card game (Pokemon/MTG/Yu-Gi-Oh/sports), edition (1st edition/shadowless/base set), rarity (holo/full art/secret rare), condition, centering. If sticker prices visible compare to market to find bargains.`,
-  other: `You are an expert collectibles appraiser. Analyze this image and identify every collectible item visible. For each item estimate current market value based on: brand, manufacturer, year, condition, completeness, original packaging, rarity and current demand.`,
+  books: `You are an expert rare book dealer. Analyze this image and identify book titles and authors. For each book estimate current market value based on: first editions, signed copies, rare printings, condition, dust jackets, genre premiums (sci-fi, beat literature, occult, art books), publisher.`,
+  records: `You are an expert vinyl record dealer. Analyze this image and identify album titles and artists. For each record estimate current market value based on: original pressings vs reissues, country of pressing (Japanese/UK originals premium), genre (jazz, psych, prog, punk, soul, electronic), condition, color vinyl, limited editions.`,
+  cds: `You are an expert CD and DVD collector. Analyze this image and identify CD and DVD titles. For each item estimate current market value based on: out of print titles, Japanese editions with OBI strips, limited editions, box sets, digipaks, cult films, criterion collection, horror DVDs, promo copies.`,
+  games: `You are an expert retro video game dealer. Analyze this image and identify game titles and consoles. For each game estimate current market value based on: complete in box vs loose vs sealed, console (NES/SNES/N64/GameCube/PS1), rare titles, limited runs, condition of box and manual.`,
+  cards: `You are an expert trading card appraiser. Analyze this image and identify cards. For each card estimate current market value based on: card game (Pokemon/MTG/Yu-Gi-Oh/sports), edition, rarity, condition. If sticker prices visible compare to market to find bargains.`,
+  other: `You are an expert collectibles appraiser. Analyze this image and identify collectible items. For each item estimate current market value based on: brand, manufacturer, year, condition, completeness, original packaging, rarity.`,
 };
 
-const JSON_INSTRUCTION = ` Respond with ONLY a valid JSON object. No markdown. No code fences. No explanation. Start your response with { and end with }. Use this exact structure:
-{"items":[{"title":"string","details":"string","estimatedValue":0,"tier":"decent","whyValuable":"string","confidence":"high","searchQuery":"string"}]}
-tier must be one of: treasure, good, decent, trash. estimatedValue is a number. Sort items by estimatedValue descending.`;
+const JSON_INSTRUCTION = ` IMPORTANT RULES:
+- Only include items you can confidently identify. If you cannot read a title clearly, skip it entirely.
+- Return a maximum of 20 items, prioritising the highest value ones.
+- Respond with ONLY a valid JSON object. No markdown. No code fences. Start with { and end with }.
+- Use this exact structure: {"items":[{"title":"string","details":"string","estimatedValue":0,"tier":"decent","whyValuable":"","confidence":"high","searchQuery":"string"}]}
+- tier must be one of: treasure, good, decent, trash. estimatedValue is a number. Sort by estimatedValue descending.`;
 
 async function getEbayToken(appId, certId) {
   if (!appId || !certId) return null;
@@ -40,12 +43,9 @@ async function getEbayPrice(searchQuery, appId, certId) {
     );
     if (!res.ok) return null;
     const data = await res.json();
-    const items = data.itemSummaries || [];
-    if (!items.length) return null;
-    const prices = items.map(i => parseFloat(i.price?.value)).filter(p => !isNaN(p) && p > 0).sort((a,b) => a-b);
+    const prices = (data.itemSummaries || []).map(i => parseFloat(i.price?.value)).filter(p => !isNaN(p) && p > 0).sort((a,b) => a-b);
     if (!prices.length) return null;
-    const avg = prices.reduce((s,p) => s+p, 0) / prices.length;
-    return { price: Math.round(avg*100)/100, count: prices.length, source: 'ebay' };
+    return { price: Math.round(prices.reduce((s,p) => s+p, 0) / prices.length * 100) / 100, count: prices.length, source: 'ebay' };
   } catch { return null; }
 }
 
@@ -80,21 +80,41 @@ function calcRecommended(gemini, ebay, discogs) {
 
 function safeParseJSON(text) {
   let s = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
-  // Try direct parse
+  // Direct parse
   try { return JSON.parse(s); } catch {}
   // Find outermost { }
   const start = s.indexOf('{');
   const end = s.lastIndexOf('}');
-  if (start !== -1 && end > start) {
-    try { return JSON.parse(s.slice(start, end + 1)); } catch {}
-    // Fix trailing commas and control chars
-    const fixed = s.slice(start, end + 1).replace(/,\s*([}\]])/g, '$1').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '');
-    try { return JSON.parse(fixed); } catch(e) {
-      // Return raw text in error for debugging
-      throw new Error('JSON parse failed. Raw: ' + s.slice(0, 300));
+  if (start === -1 || end <= start) throw new Error('No JSON found in response');
+  const block = s.slice(start, end + 1);
+  // Fix trailing commas
+  const fixed = block.replace(/,\s*([}\]])/g, '$1').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '');
+  try { return JSON.parse(fixed); } catch {}
+  // Truncated JSON - try to salvage complete items from partial array
+  try {
+    const itemsStart = fixed.indexOf('"items"');
+    if (itemsStart === -1) throw new Error('no items key');
+    const arrStart = fixed.indexOf('[', itemsStart);
+    if (arrStart === -1) throw new Error('no array');
+    // Find all complete item objects by matching balanced braces
+    const items = [];
+    let depth = 0, itemStart = -1;
+    for (let i = arrStart; i < fixed.length; i++) {
+      if (fixed[i] === '{') { if (depth === 0) itemStart = i; depth++; }
+      else if (fixed[i] === '}') {
+        depth--;
+        if (depth === 0 && itemStart !== -1) {
+          try {
+            const item = JSON.parse(fixed.slice(itemStart, i + 1));
+            items.push(item);
+          } catch {}
+          itemStart = -1;
+        }
+      }
     }
-  }
-  throw new Error('No JSON object found in response. Raw: ' + s.slice(0, 300));
+    if (items.length > 0) return { items };
+  } catch {}
+  throw new Error('Could not parse response');
 }
 
 export async function POST(request) {
