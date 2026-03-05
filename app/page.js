@@ -287,6 +287,14 @@ export default function Home() {
                   <PriceRow label="AI Estimate" icon="🤖" geminiVal={item.estimatedValue} />
                   {item.ebayPrice && <PriceRow label="eBay used" icon="🛒" data={item.ebayPrice} />}
                   {item.discogsPrice && <PriceRow label="Discogs" icon="💿" data={item.discogsPrice} />}
+                  {item.tcgPrice && <PriceRow label={`TCGPlayer${item.tcgPrice.productName ? ' · ' + item.tcgPrice.productName.slice(0,30) : ''}`} icon="🃏" data={{ price: item.tcgPrice.market, count: null, source: 'tcg' }} />}
+                  {item.psaCert && <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #1a1a1a' }}>
+                    <span style={{ fontSize: 11, color: '#22c55e' }}>✅ PSA VERIFIED · Cert #{item.psaCert.certNumber}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#22c55e' }}>PSA {item.psaCert.grade}</span>
+                  </div>}
+                  {item.bargain && <div style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.4)', borderRadius: 6, padding: '6px 8px', marginTop: 6 }}>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: '#22c55e' }}>🔥 BARGAIN · Stickered ${item.bargain.sticker} vs market ${item.bargain.market} — {item.bargain.ratio}x underpriced!</span>
+                  </div>}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 6, marginTop: 2 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: "#d4a017", letterSpacing: "0.5px" }}>💰 RECOMMENDED</span>
                     <span style={{ fontSize: 18, fontWeight: 900, color: item.tier === "treasure" ? "#d4a017" : "#e5e5e5" }}>${(item.recommended || item.estimatedValue)?.toLocaleString() ?? "?"}</span>
