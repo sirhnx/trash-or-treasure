@@ -9,9 +9,9 @@ const CATEGORY_PROMPTS = {
   other: `You are an expert collectibles appraiser. Analyze this image and identify every collectible item visible. For each item estimate current market value based on: brand, manufacturer, year, condition, completeness, original packaging, rarity and current demand.`,
 };
 
-const JSON_INSTRUCTION = ` Respond with ONLY valid JSON in this exact format, no markdown, no code fences, no extra text before or after:
-{"items":[{"title":"Item Name","details":"edition/pressing/condition notes","estimatedValue":25,"tier":"good","whyValuable":"reason if treasure tier","confidence":"high","searchQuery":"search string for eBay"}]}
-Tier rules: treasure=50+, good=15-49, decent=5-14, trash=under 5. Sort by value descending. Use double quotes only. No trailing commas.`;
+const JSON_INSTRUCTION = ` Respond with ONLY a valid JSON object. No markdown. No code fences. No explanation. Start your response with { and end with }. Use this exact structure:
+{"items":[{"title":"string","details":"string","estimatedValue":0,"tier":"decent","whyValuable":"string","confidence":"high","searchQuery":"string"}]}
+tier must be one of: treasure, good, decent, trash. estimatedValue is a number. Sort items by estimatedValue descending.`;
 
 async function getEbayToken(appId, certId) {
   if (!appId || !certId) return null;
@@ -45,7 +45,7 @@ async function getEbayPrice(searchQuery, appId, certId) {
     const prices = items.map(i => parseFloat(i.price?.value)).filter(p => !isNaN(p) && p > 0).sort((a,b) => a-b);
     if (!prices.length) return null;
     const avg = prices.reduce((s,p) => s+p, 0) / prices.length;
-    return { price: Math.round(avg*100)/100, count: prices.length, low: prices[0], high: prices[prices.length-1], source: 'ebay' };
+    return { price: Math.round(avg*100)/100, count: prices.length, source: 'ebay' };
   } catch { return null; }
 }
 
@@ -59,10 +59,9 @@ async function getDiscogsPrice(searchQuery, discogsToken, category) {
     );
     if (!searchRes.ok) return null;
     const searchData = await searchRes.json();
-    const results = searchData.results || [];
-    if (!results.length) return null;
+    if (!searchData.results?.length) return null;
     const statsRes = await fetch(
-      `https://api.discogs.com/marketplace/stats/${results[0].id}`,
+      `https://api.discogs.com/marketplace/stats/${searchData.results[0].id}`,
       { headers: { Authorization: `Discogs token=${discogsToken}`, 'User-Agent': 'TrashOrTreasure/1.0' } }
     );
     if (!statsRes.ok) return null;
@@ -76,33 +75,26 @@ async function getDiscogsPrice(searchQuery, discogsToken, category) {
 function calcRecommended(gemini, ebay, discogs) {
   const sources = [ebay, discogs].filter(Boolean);
   if (!sources.length) return gemini;
-  const avg = sources.reduce((s,x) => s+x.price, 0) / sources.length;
-  return Math.round(avg*100)/100;
+  return Math.round(sources.reduce((s,x) => s+x.price, 0) / sources.length * 100) / 100;
 }
 
 function safeParseJSON(text) {
-  // Strip markdown fences
   let s = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
-  // Try direct parse first
+  // Try direct parse
   try { return JSON.parse(s); } catch {}
-  // Extract first {...} block
+  // Find outermost { }
   const start = s.indexOf('{');
   const end = s.lastIndexOf('}');
-  if (start !== -1 && end !== -1) {
+  if (start !== -1 && end > start) {
     try { return JSON.parse(s.slice(start, end + 1)); } catch {}
+    // Fix trailing commas and control chars
+    const fixed = s.slice(start, end + 1).replace(/,\s*([}\]])/g, '$1').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '');
+    try { return JSON.parse(fixed); } catch(e) {
+      // Return raw text in error for debugging
+      throw new Error('JSON parse failed. Raw: ' + s.slice(0, 300));
+    }
   }
-  // Fix common issues: trailing commas before ] or }
-  const fixed = s
-    .replace(/,\s*]/g, ']')
-    .replace(/,\s*}/g, '}')
-    .replace(/[\x00-\x1F\x7F]/g, ' '); // strip control chars
-  try { return JSON.parse(fixed); } catch {}
-  // Last resort: extract just the items array
-  const itemsMatch = fixed.match(/"items"\s*:\s*(\[.*\])/s);
-  if (itemsMatch) {
-    try { return { items: JSON.parse(itemsMatch[1]) }; } catch {}
-  }
-  throw new Error('Failed to parse AI response as JSON');
+  throw new Error('No JSON object found in response. Raw: ' + s.slice(0, 300));
 }
 
 export async function POST(request) {
@@ -133,7 +125,7 @@ export async function POST(request) {
             { inline_data: { mime_type: mimeType, data: base64 } },
             { text: (CATEGORY_PROMPTS[category] || CATEGORY_PROMPTS.other) + JSON_INSTRUCTION }
           ]}],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+          generationConfig: { temperature: 0.1, maxOutputTokens: 8192, responseMimeType: "application/json" },
         }),
       }
     );
