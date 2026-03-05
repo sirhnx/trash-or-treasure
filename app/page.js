@@ -33,6 +33,37 @@ function ValueBadge({ tier }) {
   );
 }
 
+async function compressImage(file, maxWidth = 1600, quality = 0.7) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let w = img.width;
+        let h = img.height;
+        if (w > maxWidth) {
+          h = (h * maxWidth) / w;
+          w = maxWidth;
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(
+          (blob) => {
+            resolve(new File([blob], file.name, { type: "image/jpeg" }));
+          },
+          "image/jpeg",
+          quality
+        );
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function Home() {
   const [image, setImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -44,18 +75,19 @@ export default function Home() {
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
-  const handleImage = useCallback((file) => {
+  const handleImage = useCallback(async (file) => {
     if (!file) return;
     if (file.size > 20 * 1024 * 1024) {
       setError("Image too large. Please use an image under 20MB.");
       return;
     }
-    setImage(file);
+    const compressed = await compressImage(file);
+    setImage(compressed);
     setResults(null);
     setError(null);
     const reader = new FileReader();
     reader.onloadend = () => setImagePreview(reader.result);
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(compressed);
   }, []);
 
   const handleDrop = useCallback((e) => {
@@ -177,7 +209,7 @@ export default function Home() {
         </section>
       )}
 
-      {error && <div style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.3)", borderRadius: 8, padding: 12, marginTop: 12, color: "#fca5a5", fontSize: 13 }}>{"⚠️"} {error}</div>}
+      {error && <div style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.3)", borderRadius: 8, padding: 12, marginTop: 12, color: "#fca5a5", fontSize: 13 }}>{"\u26a0\ufe0f"} {error}</div>}
 
       {results && (
         <section className="animate-fade-in" style={{ marginTop: 16 }}>
@@ -228,4 +260,4 @@ export default function Home() {
       )}
     </main>
   );
-}
+        }
