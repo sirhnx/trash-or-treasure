@@ -72,10 +72,8 @@ function SettingsPanel({ keys, onSave, onClose }) {
   const [vals, setVals] = useState({ ...keys });
   const [visible, setVisible] = useState({});
   const [saved, setSaved] = useState(false);
-
   const handleSave = () => { onSave(vals); setSaved(true); setTimeout(() => { setSaved(false); onClose(); }, 800); };
   const connected = API_CONFIG.filter(c => vals[c.id]?.trim()).length;
-
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", zIndex: 1000, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "16px", overflowY: "auto" }}>
       <div style={{ background: "#0a0a0a", border: "1px solid #d4a017", borderRadius: 16, padding: 24, width: "100%", maxWidth: 480, marginTop: 16 }}>
@@ -126,6 +124,7 @@ export default function Home() {
   const [image, setImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [category, setCategory] = useState("books");
+  const [bookFormat, setBookFormat] = useState("paperback");
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -157,13 +156,14 @@ export default function Home() {
     try {
       const fd = new FormData();
       fd.append("image", image); fd.append("category", category);
+      fd.append("bookFormat", bookFormat);
       fd.append("apiKey", apiKeys.gemini || "");
       fd.append("ebayKey", apiKeys.ebay || "");
       fd.append("ebayCertKey", apiKeys.ebayCert || "");
       fd.append("discogsKey", apiKeys.discogs || "");
       fd.append("justtcgKey", apiKeys.justtcg || "");
       const res = await fetch("/api/analyze", { method: "POST", body: fd });
-      if (!res.ok) { const e = await res.json().catch(() => ({})); if (e.error === "NO_API_KEY") { setShowSettings(true); } throw new Error(e.error || "Analysis failed"); }
+      if (!res.ok) { const e = await res.json().catch(() => ({})); if (e.error === "NO_API_KEY") setShowSettings(true); throw new Error(e.error || "Analysis failed"); }
       const data = await res.json();
       setResults(data); setScanCount(c => c + 1);
     } catch (err) { setError(err.message || "Something went wrong."); }
@@ -179,6 +179,7 @@ export default function Home() {
   return (
     <main style={{ minHeight: "100vh", maxWidth: 480, margin: "0 auto", padding: "16px 16px 100px" }}>
       {showSettings && <SettingsPanel keys={apiKeys} onSave={saveKeys} onClose={() => setShowSettings(false)} />}
+
       <header style={{ textAlign: "center", padding: "24px 0 16px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 4 }}>
           <TreasureIcon size={28} />
@@ -204,6 +205,21 @@ export default function Home() {
             </button>
           ))}
         </div>
+
+        {category === "books" && (
+          <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+            {["paperback", "hardcover"].map(fmt => (
+              <button key={fmt} onClick={() => setBookFormat(fmt)} style={{
+                flex: 1, padding: "8px", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: bookFormat === fmt ? 700 : 400,
+                background: bookFormat === fmt ? "rgba(212,160,23,0.15)" : "var(--surface)",
+                border: "1px solid " + (bookFormat === fmt ? "#d4a017" : "var(--border)"),
+                color: bookFormat === fmt ? "#d4a017" : "#a3a3a3",
+              }}>
+                {fmt === "paperback" ? "📖 Paperback" : "📕 Hardcover"}
+              </button>
+            ))}
+          </div>
+        )}
       </section>
 
       {!imagePreview ? (
@@ -222,6 +238,15 @@ export default function Home() {
           <div style={{ position: "relative", borderRadius: 12, overflow: "hidden", marginBottom: 12, border: "1px solid var(--border)" }}>
             <img src={imagePreview} alt="Preview" style={{ width: "100%", display: "block", maxHeight: 300, objectFit: "cover" }} />
             <button onClick={reset} style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.7)", color: "#fff", border: "none", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", fontSize: 16 }}>✕</button>
+            {category === "books" && (
+              <div style={{ position: "absolute", bottom: 8, left: 8, display: "flex", gap: 4 }}>
+                {["paperback", "hardcover"].map(fmt => (
+                  <button key={fmt} onClick={() => setBookFormat(fmt)} style={{ padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontFamily: "inherit", fontSize: 11, fontWeight: bookFormat === fmt ? 700 : 400, background: bookFormat === fmt ? "#d4a017" : "rgba(0,0,0,0.7)", border: "1px solid " + (bookFormat === fmt ? "#d4a017" : "#555"), color: bookFormat === fmt ? "#000" : "#fff" }}>
+                    {fmt === "paperback" ? "📖 PB" : "📕 HC"}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           {!results && <button onClick={analyze} disabled={loading} style={{ width: "100%", background: loading ? "#333" : "linear-gradient(135deg, #d4a017, #b8860b)", color: loading ? "#737373" : "#000", border: "none", borderRadius: 12, padding: "16px", fontSize: 16, fontWeight: 800, cursor: loading ? "wait" : "pointer", fontFamily: "inherit", marginBottom: 16 }}>
             {loading ? "🔍 Scanning for treasure..." : "🔍 FIND THE TREASURE"}
@@ -258,7 +283,7 @@ export default function Home() {
                 </div>
                 <div style={{ background: "#0a0a0a", borderRadius: 8, padding: "8px 10px" }}>
                   <PriceRow label="AI Estimate" icon="🤖" geminiVal={item.estimatedValue} />
-                  {item.ebayPrice && <PriceRow label="eBay (active)" icon="🛒" data={item.ebayPrice} />}
+                  {item.ebayPrice && <PriceRow label="eBay used" icon="🛒" data={item.ebayPrice} />}
                   {item.discogsPrice && <PriceRow label="Discogs" icon="💿" data={item.discogsPrice} />}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 6, marginTop: 2 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: "#d4a017", letterSpacing: "0.5px" }}>💰 RECOMMENDED</span>
