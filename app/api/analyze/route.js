@@ -171,6 +171,25 @@ function calcRecommended(gemini, ebay, discogs, tcg) {
   return Math.round(sources.reduce((s,x) => s+x.price, 0) / sources.length * 100) / 100;
 }
 
+
+function buildEbayUrl(searchQuery, condition) {
+  const q = encodeURIComponent(searchQuery);
+  // LH_Sold=1&LH_Complete=1 shows sold/completed listings - real prices
+  const soldParams = 'LH_Sold=1&LH_Complete=1';
+  const condParam = condition === 'used' ? '&LH_ItemCondition=3000' : '';
+  return `https://www.ebay.com/sch/i.html?_nkw=${q}&${soldParams}${condParam}`;
+}
+
+function buildDiscogsUrl(searchQuery) {
+  const q = encodeURIComponent(searchQuery);
+  return `https://www.discogs.com/search/?q=${q}&type=release&sort=price&ev=qs`;
+}
+
+function buildTCGPlayerUrl(searchQuery, game) {
+  const q = encodeURIComponent(searchQuery);
+  return `https://www.tcgplayer.com/search/all/product?q=${q}&view=grid`;
+}
+
 function safeParseJSON(text) {
   let s = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
   try { return JSON.parse(s); } catch {}
@@ -269,7 +288,10 @@ export async function POST(request) {
             }
           }
 
-          return { ...item, ebayPrice, discogsPrice, psaCert, tcgPrice, recommended, tier, bargain };
+          const ebayUrl = buildEbayUrl(q, category === 'books' ? 'used' : null);
+          const discogsUrl = ['records','cds'].includes(category) ? buildDiscogsUrl(q) : null;
+          const tcgUrl = category === 'cards' ? buildTCGPlayerUrl(q, item.game) : null;
+          return { ...item, ebayPrice, discogsPrice, psaCert, tcgPrice, recommended, tier, bargain, ebayUrl, discogsUrl, tcgUrl };
         })
       );
       data.items = enriched.sort((a,b) => (b.recommended||0) - (a.recommended||0));
