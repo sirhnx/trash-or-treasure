@@ -299,6 +299,11 @@ export default function Home() {
                     <span style={{ fontSize: 11, fontWeight: 700, color: "#d4a017", letterSpacing: "0.5px" }}>💰 RECOMMENDED</span>
                     <span style={{ fontSize: 18, fontWeight: 900, color: item.tier === "treasure" ? "#d4a017" : "#e5e5e5" }}>${(item.recommended || item.estimatedValue)?.toLocaleString() ?? "?"}</span>
                   </div>
+                  <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                    {item.ebayUrl && <a href={item.ebayUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: "#737373", textDecoration: "none", background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 4, padding: "3px 8px", whiteSpace: "nowrap" }}>🛒 eBay sold listings ↗</a>}
+                    {item.discogsUrl && <a href={item.discogsUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: "#737373", textDecoration: "none", background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 4, padding: "3px 8px", whiteSpace: "nowrap" }}>💿 Discogs marketplace ↗</a>}
+                    {item.tcgUrl && <a href={item.tcgUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: "#737373", textDecoration: "none", background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 4, padding: "3px 8px", whiteSpace: "nowrap" }}>🃏 TCGPlayer ↗</a>}
+                  </div>
                 </div>
               </div>
             ))}
