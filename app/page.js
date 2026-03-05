@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 const CATEGORIES = [
   { id: "books", label: "Books", icon: "📚", sources: "AbeBooks, eBay" },
@@ -40,28 +40,78 @@ async function compressImage(file, maxWidth = 1600, quality = 0.7) {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement("canvas");
-        let w = img.width;
-        let h = img.height;
-        if (w > maxWidth) {
-          h = (h * maxWidth) / w;
-          w = maxWidth;
-        }
-        canvas.width = w;
-        canvas.height = h;
+        let w = img.width; let h = img.height;
+        if (w > maxWidth) { h = (h * maxWidth) / w; w = maxWidth; }
+        canvas.width = w; canvas.height = h;
         const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, w, h);
-        canvas.toBlob(
-          (blob) => {
-            resolve(new File([blob], file.name, { type: "image/jpeg" }));
-          },
-          "image/jpeg",
-          quality
-        );
+        canvas.toBlob((blob) => { resolve(new File([blob], file.name, { type: "image/jpeg" })); }, "image/jpeg", quality);
       };
       img.src = e.target.result;
     };
     reader.readAsDataURL(file);
   });
+}
+
+function SettingsPanel({ apiKey, onSave, onClose }) {
+  const [inputKey, setInputKey] = useState(apiKey || "");
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div style={{ background: "#141414", border: "1px solid #d4a017", borderRadius: 16, padding: 24, width: "100%", maxWidth: 440 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h2 style={{ margin: 0, color: "#d4a017", fontFamily: "'Playfair Display', serif", fontSize: 20 }}>⚙️ Settings</h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#737373", fontSize: 20, cursor: "pointer" }}>✕</button>
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ display: "block", fontSize: 11, color: "#737373", letterSpacing: "0.5px", marginBottom: 8 }}>GEMINI API KEY</label>
+          <p style={{ fontSize: 12, color: "#a3a3a3", marginBottom: 10, lineHeight: 1.5 }}>
+            Get a free key at{" "}
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style={{ color: "#d4a017" }}>
+              aistudio.google.com
+            </a>
+            {" "}— free tier gives you 1,500 scans/day.
+          </p>
+          <div style={{ position: "relative" }}>
+            <input
+              type={visible ? "text" : "password"}
+              value={inputKey}
+              onChange={(e) => setInputKey(e.target.value)}
+              placeholder="AIza..."
+              style={{ width: "100%", background: "#0a0a0a", border: "1px solid #333", borderRadius: 8, padding: "10px 40px 10px 12px", color: "#e5e5e5", fontSize: 13, fontFamily: "monospace", boxSizing: "border-box" }}
+            />
+            <button
+              onClick={() => setVisible(!visible)}
+              style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#737373", cursor: "pointer", fontSize: 16 }}>
+              {visible ? "🙈" : "👁️"}
+            </button>
+          </div>
+        </div>
+
+        <div style={{ background: "rgba(212,160,23,0.05)", border: "1px solid rgba(212,160,23,0.2)", borderRadius: 8, padding: 12, marginBottom: 20 }}>
+          <p style={{ fontSize: 11, color: "#737373", margin: 0, lineHeight: 1.5 }}>
+            🔒 Your key is saved locally on this device only. It is never sent to any server except Google's Gemini API to process your scans.
+          </p>
+        </div>
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => { onSave(""); onClose(); }}
+            style={{ flex: 1, background: "transparent", color: "#737373", border: "1px solid #333", borderRadius: 8, padding: "12px", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
+            Clear Key
+          </button>
+          <button
+            onClick={() => { onSave(inputKey.trim()); onClose(); }}
+            disabled={!inputKey.trim()}
+            style={{ flex: 2, background: inputKey.trim() ? "linear-gradient(135deg, #d4a017, #b8860b)" : "#333", color: inputKey.trim() ? "#000" : "#737373", border: "none", borderRadius: 8, padding: "12px", fontSize: 14, fontWeight: 700, cursor: inputKey.trim() ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
+            💾 Save Key
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function Home() {
@@ -72,15 +122,25 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [scanCount, setScanCount] = useState(0);
+  const [showSettings, setShowSettings] = useState(false);
+  const [apiKey, setApiKey] = useState("");
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
+  useEffect(() => {
+    const saved = localStorage.getItem("gemini_api_key");
+    if (saved) setApiKey(saved);
+  }, []);
+
+  const saveApiKey = (key) => {
+    setApiKey(key);
+    if (key) localStorage.setItem("gemini_api_key", key);
+    else localStorage.removeItem("gemini_api_key");
+  };
+
   const handleImage = useCallback(async (file) => {
     if (!file) return;
-    if (file.size > 20 * 1024 * 1024) {
-      setError("Image too large. Please use an image under 20MB.");
-      return;
-    }
+    if (file.size > 20 * 1024 * 1024) { setError("Image too large. Please use an image under 20MB."); return; }
     const compressed = await compressImage(file);
     setImage(compressed);
     setResults(null);
@@ -98,6 +158,7 @@ export default function Home() {
 
   const analyze = async () => {
     if (!image) return;
+    if (!apiKey) { setShowSettings(true); return; }
     setLoading(true);
     setError(null);
     setResults(null);
@@ -105,9 +166,14 @@ export default function Home() {
       const formData = new FormData();
       formData.append("image", image);
       formData.append("category", category);
+      formData.append("apiKey", apiKey);
       const res = await fetch("/api/analyze", { method: "POST", body: formData });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
+        if (errData.error === "NO_API_KEY" || errData.error === "INVALID_API_KEY") {
+          setShowSettings(true);
+          throw new Error("Please check your Gemini API key in Settings.");
+        }
         throw new Error(errData.error || "Analysis failed (" + res.status + ")");
       }
       const data = await res.json();
@@ -120,12 +186,7 @@ export default function Home() {
     }
   };
 
-  const reset = () => {
-    setImage(null);
-    setImagePreview(null);
-    setResults(null);
-    setError(null);
-  };
+  const reset = () => { setImage(null); setImagePreview(null); setResults(null); setError(null); };
 
   const totalValue = results?.items?.reduce((sum, i) => sum + (i.estimatedValue || 0), 0) || 0;
   const treasureCount = results?.items?.filter((i) => i.tier === "treasure").length || 0;
@@ -133,6 +194,8 @@ export default function Home() {
 
   return (
     <main style={{ minHeight: "100vh", maxWidth: 480, margin: "0 auto", padding: "16px 16px 100px" }}>
+      {showSettings && <SettingsPanel apiKey={apiKey} onSave={saveApiKey} onClose={() => setShowSettings(false)} />}
+
       <header style={{ textAlign: "center", padding: "24px 0 16px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 4 }}>
           <TreasureIcon size={28} />
@@ -142,18 +205,21 @@ export default function Home() {
           <TreasureIcon size={28} />
         </div>
         <p style={{ color: "#737373", fontSize: 12, margin: 0, letterSpacing: "1px" }}>AI-POWERED COLLECTIBLE SCANNER</p>
-        {scanCount > 0 && <p style={{ color: "#525252", fontSize: 11, margin: "4px 0 0" }}>{scanCount} scan{scanCount !== 1 ? "s" : ""} this session</p>}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginTop: 6 }}>
+          {scanCount > 0 && <p style={{ color: "#525252", fontSize: 11, margin: 0 }}>{scanCount} scan{scanCount !== 1 ? "s" : ""} this session</p>}
+          <button
+            onClick={() => setShowSettings(true)}
+            style={{ background: apiKey ? "rgba(212,160,23,0.1)" : "rgba(220,38,38,0.1)", border: "1px solid " + (apiKey ? "rgba(212,160,23,0.3)" : "rgba(220,38,38,0.4)"), borderRadius: 6, padding: "3px 10px", fontSize: 11, color: apiKey ? "#d4a017" : "#f87171", cursor: "pointer", fontFamily: "inherit" }}>
+            {apiKey ? "⚙️ Settings" : "⚙️ Add API Key"}
+          </button>
+        </div>
       </header>
 
       <section style={{ marginBottom: 16 }}>
         <label style={{ display: "block", fontSize: 11, color: "#737373", marginBottom: 6, letterSpacing: "0.5px" }}>CATEGORY</label>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
           {CATEGORIES.map((cat) => (
-            <button key={cat.id} onClick={() => setCategory(cat.id)} style={{
-              background: category === cat.id ? "rgba(212,160,23,0.15)" : "var(--surface)",
-              border: "1px solid " + (category === cat.id ? "#d4a017" : "var(--border)"),
-              borderRadius: 8, padding: "10px 4px", cursor: "pointer", textAlign: "center", transition: "all 0.2s"
-            }}>
+            <button key={cat.id} onClick={() => setCategory(cat.id)} style={{ background: category === cat.id ? "rgba(212,160,23,0.15)" : "var(--surface)", border: "1px solid " + (category === cat.id ? "#d4a017" : "var(--border)"), borderRadius: 8, padding: "10px 4px", cursor: "pointer", textAlign: "center", transition: "all 0.2s" }}>
               <div style={{ fontSize: 20 }}>{cat.icon}</div>
               <div style={{ fontSize: 10, color: category === cat.id ? "#d4a017" : "#a3a3a3", marginTop: 2, fontWeight: category === cat.id ? 700 : 400 }}>{cat.label}</div>
             </button>
@@ -162,21 +228,12 @@ export default function Home() {
       </section>
 
       {!imagePreview ? (
-        <section onDrop={handleDrop} onDragOver={(e) => e.preventDefault()} style={{
-          border: "2px dashed #333", borderRadius: 12, padding: "40px 20px", textAlign: "center",
-          background: "var(--surface)", cursor: "pointer"
-        }} onClick={() => fileInputRef.current?.click()}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>{"📷"}</div>
+        <section onDrop={handleDrop} onDragOver={(e) => e.preventDefault()} style={{ border: "2px dashed #333", borderRadius: 12, padding: "40px 20px", textAlign: "center", background: "var(--surface)", cursor: "pointer" }} onClick={() => fileInputRef.current?.click()}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>📷</div>
           <p style={{ color: "#a3a3a3", fontSize: 14, margin: "0 0 16px" }}>Snap a photo of your collection</p>
           <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
-            <button onClick={(e) => { e.stopPropagation(); cameraInputRef.current?.click(); }} style={{
-              background: "linear-gradient(135deg, #d4a017, #b8860b)", color: "#000", border: "none",
-              borderRadius: 8, padding: "10px 20px", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit"
-            }}>{"📸"} Take Photo</button>
-            <button onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }} style={{
-              background: "var(--border)", color: "#e5e5e5", border: "none",
-              borderRadius: 8, padding: "10px 20px", fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "inherit"
-            }}>{"📁"} Upload</button>
+            <button onClick={(e) => { e.stopPropagation(); cameraInputRef.current?.click(); }} style={{ background: "linear-gradient(135deg, #d4a017, #b8860b)", color: "#000", border: "none", borderRadius: 8, padding: "10px 20px", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>📸 Take Photo</button>
+            <button onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }} style={{ background: "var(--border)", color: "#e5e5e5", border: "none", borderRadius: 8, padding: "10px 20px", fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>📁 Upload</button>
           </div>
           <input ref={fileInputRef} type="file" accept="image/*" onChange={(e) => handleImage(e.target.files?.[0])} style={{ display: "none" }} />
           <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={(e) => handleImage(e.target.files?.[0])} style={{ display: "none" }} />
@@ -185,19 +242,10 @@ export default function Home() {
         <section>
           <div style={{ position: "relative", borderRadius: 12, overflow: "hidden", marginBottom: 12, border: "1px solid var(--border)" }}>
             <img src={imagePreview} alt="Preview" style={{ width: "100%", display: "block", maxHeight: 300, objectFit: "cover" }} />
-            <button onClick={reset} style={{
-              position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.7)", color: "#fff",
-              border: "none", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", fontSize: 16,
-              display: "flex", alignItems: "center", justifyContent: "center"
-            }}>{"✕"}</button>
+            <button onClick={reset} style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.7)", color: "#fff", border: "none", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
           </div>
           {!results && (
-            <button onClick={analyze} disabled={loading} className={loading ? "" : "treasure-glow"} style={{
-              width: "100%", background: loading ? "#333" : "linear-gradient(135deg, #d4a017, #b8860b)",
-              color: loading ? "#737373" : "#000", border: "none", borderRadius: 12, padding: "16px",
-              fontSize: 16, fontWeight: 800, cursor: loading ? "wait" : "pointer", fontFamily: "inherit",
-              letterSpacing: "0.5px", marginBottom: 16
-            }}>
+            <button onClick={analyze} disabled={loading} className={loading ? "" : "treasure-glow"} style={{ width: "100%", background: loading ? "#333" : "linear-gradient(135deg, #d4a017, #b8860b)", color: loading ? "#737373" : "#000", border: "none", borderRadius: 12, padding: "16px", fontSize: 16, fontWeight: 800, cursor: loading ? "wait" : "pointer", fontFamily: "inherit", letterSpacing: "0.5px", marginBottom: 16 }}>
               {loading ? (
                 <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                   <span className="animate-spin" style={{ display: "inline-block", width: 16, height: 16, border: "2px solid #525252", borderTopColor: "#d4a017", borderRadius: "50%" }} />
@@ -209,7 +257,7 @@ export default function Home() {
         </section>
       )}
 
-      {error && <div style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.3)", borderRadius: 8, padding: 12, marginTop: 12, color: "#fca5a5", fontSize: 13 }}>{"\u26a0\ufe0f"} {error}</div>}
+      {error && <div style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.3)", borderRadius: 8, padding: 12, marginTop: 12, color: "#fca5a5", fontSize: 13 }}>⚠️ {error}</div>}
 
       {results && (
         <section className="animate-fade-in" style={{ marginTop: 16 }}>
@@ -228,14 +276,9 @@ export default function Home() {
               </div>
             </div>
           </div>
-
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {results.items?.sort((a, b) => (b.estimatedValue || 0) - (a.estimatedValue || 0)).map((item, i) => (
-              <div key={i} className="animate-fade-in" style={{
-                background: item.tier === "treasure" ? "linear-gradient(135deg, rgba(212,160,23,0.08), rgba(212,160,23,0.02))" : "var(--surface)",
-                border: "1px solid " + (item.tier === "treasure" ? "rgba(212,160,23,0.4)" : "var(--border)"),
-                borderRadius: 10, padding: 12, animationDelay: i * 0.1 + "s", opacity: 0
-              }}>
+              <div key={i} className="animate-fade-in" style={{ background: item.tier === "treasure" ? "linear-gradient(135deg, rgba(212,160,23,0.08), rgba(212,160,23,0.02))" : "var(--surface)", border: "1px solid " + (item.tier === "treasure" ? "rgba(212,160,23,0.4)" : "var(--border)"), borderRadius: 10, padding: 12, animationDelay: i * 0.1 + "s", opacity: 0 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
@@ -243,7 +286,7 @@ export default function Home() {
                       <span style={{ fontSize: 13, fontWeight: 700, color: "#e5e5e5" }}>{item.title}</span>
                     </div>
                     {item.details && <p style={{ fontSize: 11, color: "#737373", margin: "2px 0 0", lineHeight: 1.4 }}>{item.details}</p>}
-                    {item.whyValuable && item.tier === "treasure" && <p style={{ fontSize: 11, color: "#d4a017", margin: "4px 0 0", lineHeight: 1.4, fontStyle: "italic" }}>{"💡"} {item.whyValuable}</p>}
+                    {item.whyValuable && item.tier === "treasure" && <p style={{ fontSize: 11, color: "#d4a017", margin: "4px 0 0", lineHeight: 1.4, fontStyle: "italic" }}>💡 {item.whyValuable}</p>}
                   </div>
                   <div style={{ textAlign: "right", flexShrink: 0 }}>
                     <div style={{ fontSize: 18, fontWeight: 800, color: item.tier === "treasure" ? "#d4a017" : "#e5e5e5" }}>${item.estimatedValue?.toLocaleString() || "?"}</div>
@@ -253,11 +296,10 @@ export default function Home() {
               </div>
             ))}
           </div>
-
           <p style={{ fontSize: 10, color: "#525252", textAlign: "center", marginTop: 16, lineHeight: 1.4 }}>Estimates based on recent {selectedCat?.sources} sales. Actual prices vary by condition, edition, and market demand.</p>
-          <button onClick={reset} style={{ width: "100%", background: "var(--surface)", color: "#d4a017", border: "1px solid #d4a017", borderRadius: 12, padding: "14px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginTop: 12 }}>{"📷"} SCAN AGAIN</button>
+          <button onClick={reset} style={{ width: "100%", background: "var(--surface)", color: "#d4a017", border: "1px solid #d4a017", borderRadius: 12, padding: "14px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginTop: 12 }}>📷 SCAN AGAIN</button>
         </section>
       )}
     </main>
   );
-        }
+}
