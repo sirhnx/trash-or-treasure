@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 const CATEGORY_PROMPTS = {
-  books: `You are an expert rare book dealer. Analyze this image and identify book titles and authors. For each book estimate current market value based on: first editions, signed copies, rare printings, condition, dust jackets, genre premiums (sci-fi, beat literature, occult, art books), publisher.`,
+  books_paperback: `You are an expert used book dealer with deep knowledge of AbeBooks, eBay used book listings, and secondhand book markets. Analyze this image and identify every book title and author visible. For each book estimate the current USED PAPERBACK market value based on: common used paperback pricing ($2-15 typical), out of print paperbacks, first paperback editions, cult classics, genre fiction collectibles. Focus on realistic secondhand prices a buyer would pay at an online used bookstore.`,
+  books_hardcover: `You are an expert rare and used hardcover book dealer with deep knowledge of AbeBooks, eBay sold listings, and antiquarian book markets. Analyze this image and identify every book title and author visible. For each book estimate the current USED HARDCOVER market value based on: first edition hardcovers, signed copies, dust jacket condition (adds significant value), ex-library copies (reduces value), rare or out of print hardcovers, collectible authors. Focus on realistic secondhand hardcover prices.`,
   records: `You are an expert vinyl record dealer. Analyze this image and identify album titles and artists. For each record estimate current market value based on: original pressings vs reissues, country of pressing (Japanese/UK originals premium), genre (jazz, psych, prog, punk, soul, electronic), condition, color vinyl, limited editions.`,
   cds: `You are an expert CD and DVD collector. Analyze this image and identify CD and DVD titles. For each item estimate current market value based on: out of print titles, Japanese editions with OBI strips, limited editions, box sets, digipaks, cult films, criterion collection, horror DVDs, promo copies.`,
   games: `You are an expert retro video game dealer. Analyze this image and identify game titles and consoles. For each game estimate current market value based on: complete in box vs loose vs sealed, console (NES/SNES/N64/GameCube/PS1), rare titles, limited runs, condition of box and manual.`,
@@ -31,14 +32,15 @@ async function getEbayToken(appId, certId) {
   } catch { return null; }
 }
 
-async function getEbayPrice(searchQuery, appId, certId) {
+async function getEbayPrice(searchQuery, appId, certId, bookFormat) {
   if (!appId || !certId || !searchQuery) return null;
   try {
     const accessToken = await getEbayToken(appId, certId);
     if (!accessToken) return null;
-    const q = encodeURIComponent(searchQuery);
+    const formatSuffix = bookFormat === 'hardcover' ? ' hardcover used' : bookFormat === 'paperback' ? ' paperback used' : '';
+    const q = encodeURIComponent(searchQuery + formatSuffix);
     const res = await fetch(
-      `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${q}&limit=5&filter=buyingOptions:{FIXED_PRICE}`,
+      `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${q}&limit=5&filter=buyingOptions:{FIXED_PRICE},conditions:{USED}`,
       { headers: { Authorization: `Bearer ${accessToken}`, 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US' } }
     );
     if (!res.ok) return null;
@@ -80,23 +82,15 @@ function calcRecommended(gemini, ebay, discogs) {
 
 function safeParseJSON(text) {
   let s = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
-  // Direct parse
   try { return JSON.parse(s); } catch {}
-  // Find outermost { }
-  const start = s.indexOf('{');
-  const end = s.lastIndexOf('}');
+  const start = s.indexOf('{'); const end = s.lastIndexOf('}');
   if (start === -1 || end <= start) throw new Error('No JSON found in response');
   const block = s.slice(start, end + 1);
-  // Fix trailing commas
   const fixed = block.replace(/,\s*([}\]])/g, '$1').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '');
   try { return JSON.parse(fixed); } catch {}
-  // Truncated JSON - try to salvage complete items from partial array
   try {
-    const itemsStart = fixed.indexOf('"items"');
-    if (itemsStart === -1) throw new Error('no items key');
-    const arrStart = fixed.indexOf('[', itemsStart);
+    const arrStart = fixed.indexOf('[', fixed.indexOf('"items"'));
     if (arrStart === -1) throw new Error('no array');
-    // Find all complete item objects by matching balanced braces
     const items = [];
     let depth = 0, itemStart = -1;
     for (let i = arrStart; i < fixed.length; i++) {
@@ -104,10 +98,7 @@ function safeParseJSON(text) {
       else if (fixed[i] === '}') {
         depth--;
         if (depth === 0 && itemStart !== -1) {
-          try {
-            const item = JSON.parse(fixed.slice(itemStart, i + 1));
-            items.push(item);
-          } catch {}
+          try { items.push(JSON.parse(fixed.slice(itemStart, i + 1))); } catch {}
           itemStart = -1;
         }
       }
@@ -121,7 +112,8 @@ export async function POST(request) {
   try {
     const formData = await request.formData();
     const imageFile = formData.get("image");
-    const category = formData.get("category") || "books";
+    const category = formData.get("category") || "books_paperback";
+    const bookFormat = formData.get("bookFormat") || "paperback";
     const geminiKey = formData.get("apiKey") || process.env.GEMINI_API_KEY;
     const ebayAppId = formData.get("ebayKey") || process.env.EBAY_APP_ID;
     const ebayCertId = formData.get("ebayCertKey") || process.env.EBAY_CERT_ID;
@@ -135,6 +127,10 @@ export async function POST(request) {
     const type = imageFile.type || "image/jpeg";
     const mimeType = ["image/jpeg","image/png","image/gif","image/webp"].includes(type) ? type : "image/jpeg";
 
+    // For books, use the format-specific prompt key
+    const promptKey = category === 'books' ? `books_${bookFormat}` : category;
+    const prompt = CATEGORY_PROMPTS[promptKey] || CATEGORY_PROMPTS[category] || CATEGORY_PROMPTS.other;
+
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
       {
@@ -143,7 +139,7 @@ export async function POST(request) {
         body: JSON.stringify({
           contents: [{ parts: [
             { inline_data: { mime_type: mimeType, data: base64 } },
-            { text: (CATEGORY_PROMPTS[category] || CATEGORY_PROMPTS.other) + JSON_INSTRUCTION }
+            { text: prompt + JSON_INSTRUCTION }
           ]}],
           generationConfig: { temperature: 0.1, maxOutputTokens: 8192, responseMimeType: "application/json" },
         }),
@@ -161,7 +157,7 @@ export async function POST(request) {
         data.items.map(async (item) => {
           const q = item.searchQuery || item.title;
           const [ebayPrice, discogsPrice] = await Promise.all([
-            getEbayPrice(q, ebayAppId, ebayCertId),
+            getEbayPrice(q, ebayAppId, ebayCertId, category === 'books' ? bookFormat : null),
             getDiscogsPrice(q, discogsToken, category)
           ]);
           const recommended = calcRecommended(item.estimatedValue, ebayPrice, discogsPrice);
