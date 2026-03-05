@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 
 const CATEGORY_PROMPTS = {
-  books: `You are an expert rare book dealer and appraiser with deep knowledge of AbeBooks, eBay sold listings, and antiquarian book markets. Analyze this image of books and identify every title/author you can see. For each book, estimate its current market value based on: - First editions, signed copies, rare printings command premium prices - Condition matters: dust jackets, binding quality, foxing - Genre premiums: sci-fi first editions, beat literature, occult, art books, banned books - Publisher matters: certain imprints are more collectible - Look for sleeper hits that most people would overlook`,
-  records: `You are an expert vinyl record dealer with encyclopedic knowledge of Discogs pricing, eBay sold listings, and record collecting. Analyze this image of vinyl records and identify every album/artist you can see. For each record, estimate its current market value based on: - Original pressings vs reissues (check label details, matrix numbers if visible) - Country of pressing matters (Japanese, UK originals often premium) - Genre premiums: jazz, psych, prog, punk, soul/funk originals, electronic - Condition grading: VG+, NM, sealed copies - Color vinyl, limited editions, promo copies - Look for records that casual sellers underprice`,
-  cds: `You are an expert in CD and DVD collecting with knowledge of Discogs, eBay sold listings, and niche collector markets. Analyze this image of CDs/DVDs and identify every title you can see. For each item, estimate its current market value based on: - Out of print titles, especially Japanese editions with OBI strips - Limited editions, box sets, digipaks - Cult films, criterion collection, horror/exploitation DVDs - Promo copies, advance copies - Region-specific releases`,
-  games: `You are an expert retro video game dealer with deep knowledge of PriceCharting, eBay sold listings, and game collecting. Analyze this image of video games and identify every title/console you can see. For each game, estimate its current market value based on: - Complete in box (CIB) vs loose vs sealed (sealed commands massive premium) - Console matters: NES, SNES, N64, GameCube, PS1 all have different markets - Rare titles: limited runs, recalled games, regional exclusives - Condition of box, manual, cartridge/disc - Look for hidden gems that non-collectors would skip`,
-  cards: `You are an expert trading card appraiser with deep knowledge of TCGPlayer, PSA grading, eBay sold listings, and card collecting markets. Analyze this image of trading cards and identify every card you can see. For each card, estimate its current market value based on: - Card game: Pokemon, Magic: The Gathering, Yu-Gi-Oh!, sports cards - Edition: 1st edition, shadowless, base set, unlimited - Rarity: holo, reverse holo, full art, secret rare, vintage - Condition/centering (estimate grade if possible) - If sticker prices are visible, compare to actual market value to find bargains - Look for cards that are undervalued relative to their actual worth`,
-  other: `You are an expert collectibles appraiser with broad knowledge across antiques, toys, memorabilia, and eBay sold listings. Analyze this image and identify every collectible item you can see. For each item, estimate its current market value based on: - Brand, manufacturer, year of production - Condition, completeness, original packaging - Rarity and demand in current market - Look for items that casual sellers commonly underprice`,
+  books: `You are an expert rare book dealer. Analyze this image and identify every book title and author visible. For each book estimate current market value based on: first editions, signed copies, rare printings, condition, dust jackets, genre premiums (sci-fi, beat literature, occult, art books), publisher. Look for sleeper hits.`,
+  records: `You are an expert vinyl record dealer. Analyze this image and identify every album and artist visible. For each record estimate current market value based on: original pressings vs reissues, country of pressing (Japanese/UK originals premium), genre (jazz, psych, prog, punk, soul, electronic), condition (VG+/NM/sealed), color vinyl, limited editions, promo copies.`,
+  cds: `You are an expert CD and DVD collector. Analyze this image and identify every CD and DVD title visible. For each item estimate current market value based on: out of print titles, Japanese editions with OBI strips, limited editions, box sets, digipaks, cult films, criterion collection, horror DVDs, promo copies, region-specific releases.`,
+  games: `You are an expert retro video game dealer. Analyze this image and identify every game title and console visible. For each game estimate current market value based on: complete in box vs loose vs sealed, console (NES/SNES/N64/GameCube/PS1), rare titles, limited runs, recalled games, condition of box and manual.`,
+  cards: `You are an expert trading card appraiser. Analyze this image and identify every card visible. For each card estimate current market value based on: card game (Pokemon/MTG/Yu-Gi-Oh/sports), edition (1st edition/shadowless/base set), rarity (holo/full art/secret rare), condition, centering. If sticker prices visible compare to market to find bargains.`,
+  other: `You are an expert collectibles appraiser. Analyze this image and identify every collectible item visible. For each item estimate current market value based on: brand, manufacturer, year, condition, completeness, original packaging, rarity and current demand.`,
 };
 
-const JSON_INSTRUCTION = ` IMPORTANT: You must respond with ONLY valid JSON, no markdown, no code fences, no explanation. Respond in this exact JSON format: { "items": [ { "title": "Item name - Author/Artist", "details": "Brief description: edition, pressing, condition notes", "estimatedValue": 25, "tier": "treasure", "whyValuable": "Why this item is valuable (only for treasure tier)", "confidence": "high", "searchQuery": "exact search string to use on eBay/Discogs for this item" } ] } Rules for tier: treasure=$50+, good=$15-49, decent=$5-14, trash=under $5. estimatedValue: realistic USD market prices based on recent sold listings. confidence: high/medium/low. searchQuery: the best search string to find this exact item on eBay or Discogs. Identify as many items as you can see. Sort by value highest first.`;
+const JSON_INSTRUCTION = ` Respond with ONLY valid JSON in this exact format, no markdown, no code fences, no extra text before or after:
+{"items":[{"title":"Item Name","details":"edition/pressing/condition notes","estimatedValue":25,"tier":"good","whyValuable":"reason if treasure tier","confidence":"high","searchQuery":"search string for eBay"}]}
+Tier rules: treasure=50+, good=15-49, decent=5-14, trash=under 5. Sort by value descending. Use double quotes only. No trailing commas.`;
 
 async function getEbayToken(appId, certId) {
   if (!appId || !certId) return null;
@@ -40,16 +42,15 @@ async function getEbayPrice(searchQuery, appId, certId) {
     const data = await res.json();
     const items = data.itemSummaries || [];
     if (!items.length) return null;
-    const prices = items.map(i => parseFloat(i.price?.value)).filter(p => !isNaN(p) && p > 0).sort((a, b) => a - b);
+    const prices = items.map(i => parseFloat(i.price?.value)).filter(p => !isNaN(p) && p > 0).sort((a,b) => a-b);
     if (!prices.length) return null;
-    const avg = prices.reduce((s, p) => s + p, 0) / prices.length;
-    return { price: Math.round(avg * 100) / 100, count: prices.length, low: prices[0], high: prices[prices.length - 1], source: 'ebay' };
+    const avg = prices.reduce((s,p) => s+p, 0) / prices.length;
+    return { price: Math.round(avg*100)/100, count: prices.length, low: prices[0], high: prices[prices.length-1], source: 'ebay' };
   } catch { return null; }
 }
 
 async function getDiscogsPrice(searchQuery, discogsToken, category) {
-  if (!discogsToken || !searchQuery) return null;
-  if (!['records','cds'].includes(category)) return null;
+  if (!discogsToken || !searchQuery || !['records','cds'].includes(category)) return null;
   try {
     const q = encodeURIComponent(searchQuery);
     const searchRes = await fetch(
@@ -60,24 +61,48 @@ async function getDiscogsPrice(searchQuery, discogsToken, category) {
     const searchData = await searchRes.json();
     const results = searchData.results || [];
     if (!results.length) return null;
-    const releaseId = results[0].id;
     const statsRes = await fetch(
-      `https://api.discogs.com/marketplace/stats/${releaseId}`,
+      `https://api.discogs.com/marketplace/stats/${results[0].id}`,
       { headers: { Authorization: `Discogs token=${discogsToken}`, 'User-Agent': 'TrashOrTreasure/1.0' } }
     );
     if (!statsRes.ok) return null;
     const stats = await statsRes.json();
     const price = stats.median?.value || stats.lowest_price?.value;
     if (!price) return null;
-    return { price: Math.round(price * 100) / 100, count: stats.num_for_sale || 0, source: 'discogs' };
+    return { price: Math.round(price*100)/100, count: stats.num_for_sale || 0, source: 'discogs' };
   } catch { return null; }
 }
 
 function calcRecommended(gemini, ebay, discogs) {
   const sources = [ebay, discogs].filter(Boolean);
   if (!sources.length) return gemini;
-  const avg = sources.reduce((s, x) => s + x.price, 0) / sources.length;
-  return Math.round(avg * 100) / 100;
+  const avg = sources.reduce((s,x) => s+x.price, 0) / sources.length;
+  return Math.round(avg*100)/100;
+}
+
+function safeParseJSON(text) {
+  // Strip markdown fences
+  let s = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+  // Try direct parse first
+  try { return JSON.parse(s); } catch {}
+  // Extract first {...} block
+  const start = s.indexOf('{');
+  const end = s.lastIndexOf('}');
+  if (start !== -1 && end !== -1) {
+    try { return JSON.parse(s.slice(start, end + 1)); } catch {}
+  }
+  // Fix common issues: trailing commas before ] or }
+  const fixed = s
+    .replace(/,\s*]/g, ']')
+    .replace(/,\s*}/g, '}')
+    .replace(/[\x00-\x1F\x7F]/g, ' '); // strip control chars
+  try { return JSON.parse(fixed); } catch {}
+  // Last resort: extract just the items array
+  const itemsMatch = fixed.match(/"items"\s*:\s*(\[.*\])/s);
+  if (itemsMatch) {
+    try { return { items: JSON.parse(itemsMatch[1]) }; } catch {}
+  }
+  throw new Error('Failed to parse AI response as JSON');
 }
 
 export async function POST(request) {
@@ -104,21 +129,20 @@ export async function POST(request) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ parts: [{ inline_data: { mime_type: mimeType, data: base64 } }, { text: (CATEGORY_PROMPTS[category] || CATEGORY_PROMPTS.other) + JSON_INSTRUCTION }] }],
+          contents: [{ parts: [
+            { inline_data: { mime_type: mimeType, data: base64 } },
+            { text: (CATEGORY_PROMPTS[category] || CATEGORY_PROMPTS.other) + JSON_INSTRUCTION }
+          ]}],
           generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
         }),
       }
     );
 
-    if (!geminiRes.ok) { const errText = await geminiRes.text(); throw new Error(`Gemini API error: ${geminiRes.status} ${errText.slice(0,100)}`); }
+    if (!geminiRes.ok) { const t = await geminiRes.text(); throw new Error(`Gemini error ${geminiRes.status}: ${t.slice(0,100)}`); }
 
     const geminiData = await geminiRes.json();
-    const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    let cleanJson = responseText.replace(/```json\n?/g,"").replace(/```\n?/g,"").trim();
-
-    let data;
-    try { data = JSON.parse(cleanJson); }
-    catch { const m = cleanJson.match(/\{[\s\S]*\}/); if (m) data = JSON.parse(m[0]); else throw new Error("Failed to parse AI response"); }
+    const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const data = safeParseJSON(rawText);
 
     if (data.items?.length) {
       const enriched = await Promise.all(
@@ -129,7 +153,7 @@ export async function POST(request) {
             getDiscogsPrice(q, discogsToken, category)
           ]);
           const recommended = calcRecommended(item.estimatedValue, ebayPrice, discogsPrice);
-          let tier = recommended >= 50 ? 'treasure' : recommended >= 15 ? 'good' : recommended >= 5 ? 'decent' : 'trash';
+          const tier = recommended >= 50 ? 'treasure' : recommended >= 15 ? 'good' : recommended >= 5 ? 'decent' : 'trash';
           return { ...item, ebayPrice, discogsPrice, recommended, tier };
         })
       );
