@@ -16,6 +16,7 @@ const API_CONFIG = [
   { id: "ebayCert", label: "eBay Cert ID", icon: "🔑", required: false, placeholder: "SandBox-XXXX-XXXX-XXXX-XXXX", badge: "FREE", badgeColor: "#059669", helpText: "developer.ebay.com → My Keys (same page as App ID)", helpUrl: "https://developer.ebay.com/my/keys", description: "Required alongside App ID for OAuth", categories: "All categories" },
   { id: "discogs", label: "Discogs Token", icon: "🎶", required: false, placeholder: "abCdEfGhIjKlMn...", badge: "FREE", badgeColor: "#059669", helpText: "discogs.com/settings/developers", helpUrl: "https://www.discogs.com/settings/developers", description: "Marketplace prices for vinyl & CDs", categories: "Vinyl Records, CDs/DVDs" },
   { id: "justtcg", label: "JustTCG API Key", icon: "🃏", required: false, placeholder: "jtcg_...", badge: "FREE", badgeColor: "#059669", helpText: "Free tier at justtcg.com", helpUrl: "https://justtcg.com", description: "Pokemon, MTG, Yu-Gi-Oh prices", categories: "Trading Cards" },
+  { id: "psa", label: "PSA Access Token", icon: "🏆", required: false, placeholder: "16A1k...", badge: "FREE", badgeColor: "#059669", helpText: "psacard.com/publicapi → Generate Token", helpUrl: "https://www.psacard.com/publicapi", description: "Cert lookup & grade verify for graded slabs", categories: "Trading Cards" },
 ];
 
 function TreasureIcon({ size = 24 }) {
@@ -162,6 +163,7 @@ export default function Home() {
       fd.append("ebayCertKey", apiKeys.ebayCert || "");
       fd.append("discogsKey", apiKeys.discogs || "");
       fd.append("justtcgKey", apiKeys.justtcg || "");
+      fd.append("psaKey", apiKeys.psa || "");
       const res = await fetch("/api/analyze", { method: "POST", body: fd });
       if (!res.ok) { const e = await res.json().catch(() => ({})); if (e.error === "NO_API_KEY") setShowSettings(true); throw new Error(e.error || "Analysis failed"); }
       const data = await res.json();
