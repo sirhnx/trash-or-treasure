@@ -131,14 +131,15 @@ async function getEbayPrice(searchQuery, appId, certId, bookFormat) {
     const q = encodeURIComponent(searchQuery + formatSuffix);
     const condFilter = bookFormat ? ',conditions:{USED}' : '';
     const res = await fetch(
-      `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${q}&limit=5&filter=buyingOptions:{FIXED_PRICE}${condFilter}`,
-      { headers: { Authorization: `Bearer ${accessToken}`, 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US' } }
+      `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${q}&limit=10&filter=buyingOptions:{FIXED_PRICE},itemLocationCountry:AU${condFilter}`,
+      { headers: { Authorization: `Bearer ${accessToken}`, 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_AU', 'X-EBAY-C-ENDUSERCTX': 'contextualLocation=country%3DAU' } }
     );
     if (!res.ok) return null;
     const data = await res.json();
     const prices = (data.itemSummaries || []).map(i => parseFloat(i.price?.value)).filter(p => !isNaN(p) && p > 0).sort((a,b) => a-b);
-    if (!prices.length) return null;
-    return { price: Math.round(prices.reduce((s,p) => s+p,0) / prices.length * 100) / 100, count: prices.length, source: 'ebay' };
+    const cheapest = prices.slice(0, 5);
+    if (!cheapest.length) return null;
+    return { price: Math.round(cheapest.reduce((s,p) => s+p,0) / cheapest.length * 100) / 100, low: cheapest[0], count: cheapest.length, source: 'ebay_au' };
   } catch { return null; }
 }
 
@@ -177,7 +178,7 @@ function buildEbayUrl(searchQuery, condition) {
   // LH_Sold=1&LH_Complete=1 shows sold/completed listings - real prices
   const soldParams = 'LH_Sold=1&LH_Complete=1';
   const condParam = condition === 'used' ? '&LH_ItemCondition=3000' : '';
-  return `https://www.ebay.com/sch/i.html?_nkw=${q}&${soldParams}${condParam}`;
+  return `https://www.ebay.com.au/sch/i.html?_nkw=${q}&${soldParams}${condParam}`;
 }
 
 function buildDiscogsUrl(searchQuery) {
